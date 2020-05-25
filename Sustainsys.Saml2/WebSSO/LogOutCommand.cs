@@ -10,6 +10,7 @@ using System.Linq;
 using System.Security.Cryptography.Xml;
 using Sustainsys.Saml2.Internal;
 using Sustainsys.Saml2.Metadata;
+using Sustainsys.Saml2.Metadata.Exceptions;
 
 namespace Sustainsys.Saml2.WebSso
 {
@@ -83,13 +84,17 @@ namespace Sustainsys.Saml2.WebSso
                 var unbindResult = binding.Unbind(request, options);
                 options.Notifications.MessageUnbound(unbindResult);
 
-                VerifyMessageIsSigned(unbindResult, options);
                 switch (unbindResult.Data.LocalName)
                 {
                     case "LogoutRequest":
+                        VerifyMessageIsSigned(unbindResult, options);
                         commandResult = HandleRequest(unbindResult, request, options);
                         break;
                     case "LogoutResponse":
+                        if (!options.SPOptions.Compatibility.AcceptUnsignedLogoutResponses)
+                        {
+                            VerifyMessageIsSigned(unbindResult, options);
+                        }
                         var storedRequestState = options.Notifications.GetLogoutResponseState(request);
                         var urls = new Saml2Urls(request, options);
                         commandResult = HandleResponse(unbindResult, storedRequestState, options, returnUrl, urls);

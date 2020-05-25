@@ -24,6 +24,7 @@ using SigningCredentials = Microsoft.IdentityModel.Tokens.SigningCredentials;
 using X509SecurityKey = Microsoft.IdentityModel.Tokens.X509SecurityKey;
 using System.Collections.Generic;
 using Microsoft.IdentityModel.Logging;
+using Sustainsys.Saml2.Metadata.Exceptions;
 
 namespace Sustainsys.Saml2.Tests.Saml2P
 {
@@ -2351,6 +2352,73 @@ namespace Sustainsys.Saml2.Tests.Saml2P
                 r => r.GetClaims(options))
                 .Should().Throw<InvalidSignatureException>()
                 .And.Message.Should().Be("The signature was valid, but the verification of the certificate failed. Is it expired or revoked? Are you sure you really want to enable ValidateCertificates (it's normally not needed)?");
+        }
+
+        [TestMethod]
+        public void Saml2Response_GetClaims_RejectsHolderOfKey()
+        {
+            var options = StubFactory.CreateOptions();
+
+            var responseXml =
+            @"<?xml version=""1.0"" encoding=""UTF-8""?>
+            <saml2p:Response xmlns:saml2p=""urn:oasis:names:tc:SAML:2.0:protocol""
+            xmlns:saml2=""urn:oasis:names:tc:SAML:2.0:assertion""
+            ID = """ + MethodBase.GetCurrentMethod().Name + @""" Version=""2.0"" IssueInstant=""2013-01-01T00:00:00Z"">
+                <saml2:Issuer>https://idp.example.com</saml2:Issuer>
+                <saml2p:Status>
+                    <saml2p:StatusCode Value=""urn:oasis:names:tc:SAML:2.0:status:Success"" />
+                </saml2p:Status>
+                <saml2:Assertion xmlns:saml2=""urn:oasis:names:tc:SAML:2.0:assertion""
+                Version=""2.0"" ID=""" + MethodBase.GetCurrentMethod().Name + @"_Assertion1""
+                IssueInstant=""2013-09-25T00:00:00Z"">
+                    <saml2:Issuer>https://idp.example.com</saml2:Issuer>
+                    <saml2:Subject>
+                        <saml2:NameID>SomeUser</saml2:NameID>
+                        <saml2:SubjectConfirmation Method=""urn:oasis:names:tc:SAML:2.0:cm:holder-of-key"" />
+                    </saml2:Subject>
+                    <saml2:Conditions NotOnOrAfter=""2100-01-01T00:00:00Z"" />
+                </saml2:Assertion>
+            </saml2p:Response>";
+
+            responseXml = SignedXmlHelper.SignXml(responseXml);
+
+            Saml2Response.Read(responseXml).Invoking(
+                r => r.GetClaims(options))
+                .Should().Throw<Saml2Exception>()
+                .WithMessage("*subject confirmation*bearer*");
+        }
+
+        [TestMethod]
+        public void Saml2Response_GetClaims_RejectsMissingSubjectConfirmation()
+        {
+            var options = StubFactory.CreateOptions();
+
+            var responseXml =
+            @"<?xml version=""1.0"" encoding=""UTF-8""?>
+            <saml2p:Response xmlns:saml2p=""urn:oasis:names:tc:SAML:2.0:protocol""
+            xmlns:saml2=""urn:oasis:names:tc:SAML:2.0:assertion""
+            ID = """ + MethodBase.GetCurrentMethod().Name + @""" Version=""2.0"" IssueInstant=""2013-01-01T00:00:00Z"">
+                <saml2:Issuer>https://idp.example.com</saml2:Issuer>
+                <saml2p:Status>
+                    <saml2p:StatusCode Value=""urn:oasis:names:tc:SAML:2.0:status:Success"" />
+                </saml2p:Status>
+                <saml2:Assertion xmlns:saml2=""urn:oasis:names:tc:SAML:2.0:assertion""
+                Version=""2.0"" ID=""" + MethodBase.GetCurrentMethod().Name + @"_Assertion1""
+                IssueInstant=""2013-09-25T00:00:00Z"">
+                    <saml2:Issuer>https://idp.example.com</saml2:Issuer>
+                    <saml2:Subject>
+                        <saml2:NameID>SomeUser</saml2:NameID>
+                    </saml2:Subject>
+                    <saml2:Conditions NotOnOrAfter=""2100-01-01T00:00:00Z"" />
+                </saml2:Assertion>
+            </saml2p:Response>";
+
+            responseXml = SignedXmlHelper.SignXml(responseXml);
+
+            Saml2Response.Read(responseXml).Invoking(
+                r => r.GetClaims(options))
+                .Should().Throw<Saml2ResponseFailedValidationException>()
+                .WithMessage("*No subject confirmation*");
         }
 
         [TestMethod]
